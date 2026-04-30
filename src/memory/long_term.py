@@ -22,15 +22,15 @@ class LongTermMemory:
         """Promote repeated short-term patterns into long-term memory."""
         for evidence in short_term_evidence:
             matched_text = None
-            for existing_text in self.support[user_id][domain]:
-                existing = next(ev for ev in self.store[user_id][domain] if ev.text == existing_text)
+            stored_by_text = {ev.text: ev for ev in self.store[user_id][domain]}
+            for existing_text, existing in stored_by_text.items():
                 if cosine_similarity(evidence.embedding, existing.embedding) > self.sim_threshold:
                     matched_text = existing_text
                     break
             target_text = matched_text or evidence.text
             current_support = self.support[user_id][domain].get(target_text, 0) + 1
             self.support[user_id][domain][target_text] = current_support
-            if current_support >= self.min_support and not any(ev.text == target_text for ev in self.store[user_id][domain]):
+            if current_support >= self.min_support and target_text not in stored_by_text:
                 self.store[user_id][domain].append(
                     Evidence(
                         evidence_id=f"lt-{user_id}-{domain}-{len(self.store[user_id][domain])}",
