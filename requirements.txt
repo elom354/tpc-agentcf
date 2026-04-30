@@ -9,6 +9,8 @@ jupyter
 ipykernel
 pytest
 torch
+transformers
+sentencepiece
 sentence-transformers
 datasets
 openai

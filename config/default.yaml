@@ -48,7 +48,8 @@ escalation:
   trigger_only: true
 
 llm:
-  backend: "openai"
+  backend: "mock"
+  model: ""
   temperature: 0.0
   max_tokens: 256
 

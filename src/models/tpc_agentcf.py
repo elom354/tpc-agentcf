@@ -10,6 +10,7 @@ import pandas as pd
 from src.agents.escalation_agent import EscalationAgent
 from src.evaluation.faithfulness_metrics import faithfulness_score
 from src.evaluation.ranking_metrics import hit_rate_at_k, mrr_at_k, ndcg_at_k, recall_at_k
+from src.llm.local_hf import LocalHuggingFaceLLM
 from src.llm.mock_llm import MockLLM
 from src.llm.openai_compatible import OpenAICompatibleLLM
 from src.memory.common import mean_embedding
@@ -28,7 +29,10 @@ from src.models.popularity import compute_popularity_stats, pop_rank_candidates,
 def build_llm_client(config: dict[str, Any]):
     """Select the configured LLM backend."""
     if config["llm"]["backend"] == "openai":
-        return OpenAICompatibleLLM()
+        return OpenAICompatibleLLM(config["llm"].get("model"))
+    if config["llm"]["backend"] == "local_hf":
+        model_name = config["llm"].get("model") or "google/flan-t5-small"
+        return LocalHuggingFaceLLM(model_name=model_name, max_new_tokens=config["llm"].get("max_tokens", 64))
     return MockLLM()
 
 
@@ -40,16 +44,30 @@ def initialize_memories(train_interactions: pd.DataFrame, items: pd.DataFrame, c
     group_memory = GroupMemory(config["group_memory"]["num_groups"], config["group_memory"]["group_window"])
     item_lookup = items.astype(str).set_index("item_id").to_dict("index")
     user_profiles: dict[str, list[list[float]]] = {}
-    for row in train_interactions.itertuples(index=False):
+    history = train_interactions.sort_values(["user_id", "timestamp"]).copy()
+    if "split" in history.columns:
+        long_term_history = history[history["split"] == "train"].copy()
+        recent_history = history[history["split"].isin(["validation", "train"])].copy()
+    else:
+        long_term_history = history
+        recent_history = history
+    for row in long_term_history.itertuples(index=False):
+        user_id = str(row.user_id)
+        item_id = str(row.item_id)
+        item_text = item_lookup[item_id]["description"]
+        bootstrap_evidence = short_term.add(user_id, item_id, row.domain, item_text, float(row.timestamp))
+        long_term.consolidate(user_id, row.domain, [bootstrap_evidence])
+        user_profiles.setdefault(user_id, []).append(bootstrap_evidence.embedding)
+    short_term = ShortTermMemory(config["memory"]["short_term_window"], config["memory"]["lambda_decay"])
+    for row in recent_history.itertuples(index=False):
         user_id = str(row.user_id)
         item_id = str(row.item_id)
         item_text = item_lookup[item_id]["description"]
         evidence = short_term.add(user_id, item_id, row.domain, item_text, float(row.timestamp))
-        long_term.consolidate(user_id, row.domain, [evidence])
         domain_memory.update(user_id, item_id, row.domain, item_text, float(row.timestamp))
         user_profiles.setdefault(user_id, []).append(evidence.embedding)
     group_memory.fit_user_groups({user_id: mean_embedding(embeddings) for user_id, embeddings in user_profiles.items()})
-    for row in train_interactions.itertuples(index=False):
+    for row in recent_history.itertuples(index=False):
         user_id = str(row.user_id)
         item_id = str(row.item_id)
         group_memory.update(user_id, item_id, row.domain, item_lookup[item_id]["description"], float(row.timestamp))
@@ -62,9 +80,9 @@ def initialize_memories(train_interactions: pd.DataFrame, items: pd.DataFrame, c
 
 
 def _build_user_conflict_map(interactions: pd.DataFrame, items: pd.DataFrame, config: dict[str, Any]) -> dict[tuple[str, str], Any]:
-    train_interactions = interactions[interactions["split"] == "train"].copy()
+    history_interactions = interactions[interactions["split"].isin(["train", "validation"])].copy()
     llm_client = build_llm_client(config)
-    memories = initialize_memories(train_interactions, items, config)
+    memories = initialize_memories(history_interactions, items, config)
     detector = ConflictDetector(
         llm_client,
         config["conflict"]["conflict_threshold"],
@@ -86,11 +104,12 @@ def run_recommender(
 ) -> tuple[pd.DataFrame, list[dict], list[dict], list[dict]]:
     """Run a model variant over test interactions."""
     llm_client = build_llm_client(config)
+    history_interactions = interactions[interactions["split"].isin(["train", "validation"])].copy()
     train_interactions = interactions[interactions["split"] == "train"].copy()
     test_interactions = interactions[interactions["split"] == "test"].copy()
     item_lookup = items.astype(str).set_index("item_id").to_dict("index")
     popularity = compute_popularity_stats(train_interactions)
-    memories = initialize_memories(train_interactions, items, config)
+    memories = initialize_memories(history_interactions, items, config)
     detector = ConflictDetector(
         llm_client,
         config["conflict"]["conflict_threshold"],

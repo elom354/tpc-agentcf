@@ -17,6 +17,8 @@ dependencies:
   - pytest
   - pip:
       - torch
+      - transformers
+      - sentencepiece
       - sentence-transformers
       - datasets
       - openai
