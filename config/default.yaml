@@ -1,0 +1,58 @@
+project:
+  name: "TPC-AgentCF"
+  seed: 42
+  output_dir: "outputs"
+
+data:
+  dataset: "movielens"
+  max_users: 100
+  max_items: 500
+  min_interactions_per_user: 10
+  candidate_sample_size: 50
+
+memory:
+  short_term_window: 15
+  long_term_min_support: 3
+  lambda_decay: 0.05
+  embedding_backend: "tfidf"
+  embedding_model: "all-MiniLM-L6-v2"
+  sim_threshold: 0.35
+
+conflict:
+  enabled: true
+  conflict_threshold: 0.35
+  max_distance: 1.0
+  min_short_term_size: 3
+  escalation_threshold: 0.50
+  score_margin: 0.05
+
+group_memory:
+  enabled: true
+  num_groups: 5
+  group_window: 50
+
+popularity:
+  head_percentile: 0.80
+  alignment_threshold: 0.40
+  conflict_discount_max: 0.60
+  beta_pop_penalty: 0.20
+  high_pop_threshold: 0.90
+
+scoring:
+  alpha_temporal: 0.30
+  alpha_group: 0.20
+  alpha_pop: 0.15
+
+escalation:
+  enabled: true
+  trigger_only: true
+
+llm:
+  backend: "mock"
+  temperature: 0.0
+  max_tokens: 256
+
+evaluation:
+  k_values: [5, 10]
+  faithfulness_sim_threshold: 0.35
+  run_ablations: true

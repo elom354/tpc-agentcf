@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.dylib
+*.zip
+*.gz
+data/raw/
+data/processed/
+outputs/
+!.gitkeep

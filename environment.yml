@@ -1,0 +1,23 @@
+name: tpc-agentcf
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - pandas
+  - scikit-learn
+  - scipy
+  - pyyaml
+  - tqdm
+  - matplotlib
+  - jupyter
+  - ipykernel
+  - pip:
+      - torch
+      - sentence-transformers
+      - datasets
+      - openai
+      - rich
+      - requests
